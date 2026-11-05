@@ -1,7 +1,5 @@
 # deep-hedging
 
-[![tests](https://github.com/amadined/deep-hedging/actions/workflows/tests.yml/badge.svg)](https://github.com/amadined/deep-hedging/actions/workflows/tests.yml)
-
 Deep hedging of European options under transaction costs and stochastic volatility (Heston), compared against classical benchmarks. Python / PyTorch.
 
 ## Question
@@ -16,7 +14,7 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 
 ## Roadmap
 
-- [ ] Black–Scholes pricer and delta
+- [x] Black–Scholes pricer and delta
 - [ ] Geometric Brownian motion simulator
 - [ ] Monte Carlo pricing with standard errors, validated against Black–Scholes
 - [ ] Heston simulator and semi-analytic Heston pricer
@@ -54,6 +52,7 @@ python experiments/01_mc_convergence.py
 
 ## References
 
+- J. C. Hull. *Options, Futures, and Other Derivatives.* 7th ed. Pearson Prentice Hall, 2009.
 - H. Buehler, L. Gonon, J. Teichmann, B. Wood. *Deep Hedging.* Quantitative Finance 19(8), 2019.
 - F. Black, M. Scholes. *The Pricing of Options and Corporate Liabilities.* Journal of Political Economy, 1973.
 - S. Heston. *A Closed-Form Solution for Options with Stochastic Volatility.* Review of Financial Studies, 1993.
