@@ -15,7 +15,7 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 ## Roadmap
 
 - [x] Black–Scholes pricer and delta
-- [ ] Geometric Brownian motion simulator
+- [x] Geometric Brownian motion simulator
 - [ ] Monte Carlo pricing with standard errors, validated against Black–Scholes
 - [ ] Heston simulator and semi-analytic Heston pricer
 - [ ] Classical hedging baselines: delta, Leland, Whalley–Wilmott
@@ -47,7 +47,6 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
-python experiments/01_mc_convergence.py
 ```
 
 ## References
