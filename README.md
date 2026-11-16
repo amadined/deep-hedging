@@ -16,7 +16,7 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 
 - [x] Black–Scholes pricer and delta
 - [x] Geometric Brownian motion simulator
-- [ ] Monte Carlo pricing with standard errors, validated against Black–Scholes
+- [x] Monte Carlo pricing with standard errors, validated against Black–Scholes
 - [ ] Heston simulator and semi-analytic Heston pricer
 - [ ] Classical hedging baselines: delta, Leland, Whalley–Wilmott
 - [ ] Deep hedging network with CVaR loss (PyTorch)
@@ -24,6 +24,16 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 - [ ] Experiments under Heston
 
 ## Results so far
+
+Comparing Monte Carlo pricing to Black-Scholes exact pricing.
+
+| Option | S₀  | K   | T      | r   | σ   | Black–Scholes | Monte Carlo | Std. error | z     |
+|--------------------------------------------------------------------------------------------|
+| Call   | 100 | 100 | 1      | 5%  | 20% | 10.4506       | 10.4645     | 0.0329     | +0.42 |
+| Put    | 100 | 100 | 1      | 5%  | 20% | 5.5735        | 5.5769      | 0.0194     | +0.17 |
+| Call   | 42  | 40  | 0.5    | 10% | 20% | 4.7594        | 4.7543      | 0.0111     | -0.46 |
+| Put    | 42  | 40  | 0.5    | 10% | 20% | 0.8086        | 0.8072      | 0.0041     | -0.34 |
+| Call   | 100 | 105 | 30/252 | 0%  | 20% | 0.9980        | 1.0032      | 0.0057     | +0.92 |
 
 ## Repository structure
 
