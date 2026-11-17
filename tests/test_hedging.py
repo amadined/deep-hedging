@@ -1,0 +1,179 @@
+import numpy as np
+import pytest
+
+from deep_hedging.baselines import bs_delta_strategy
+from deep_hedging.black_scholes import call_delta, call_price
+from deep_hedging.hedging import hedge_pnl
+from deep_hedging.models.gbm import simulate_gbm
+from deep_hedging.monte_carlo import call_payoff
+from deep_hedging.risk import cvar, summarize, var
+
+
+# ===========================================================================
+# hedge_pnl
+# ===========================================================================
+
+# One path, two steps: prices 100 -> 110 -> 105, hold 0.5 then 1.0 shares
+PATH = np.array([[100.0, 110.0, 105.0]])
+DELTAS = np.array([[0.5, 1.0]])
+PAYOFF = np.array([5.0])
+P0 = 3.0
+
+
+def test_pnl_without_hedging_is_premium_minus_payoff():
+    paths = simulate_gbm(100, 0.0, 0.2, 1.0, 10, 1000, seed=0)
+    payoff = call_payoff(paths[:, -1], 100)
+    pnl = hedge_pnl(paths, np.zeros((1000, 10)), payoff, p0=8.0, cost=0.0)
+    assert np.allclose(pnl, 8.0 - payoff)
+
+
+def test_pnl_hand_example_without_costs():
+    # Gains: 0.5 * (110 - 100) + 1.0 * (105 - 110) = 5 - 5 = 0
+    # P&L:   3 - 5 + 0 = -2
+    pnl = hedge_pnl(PATH, DELTAS, PAYOFF, P0, cost=0.0)
+    assert pnl.shape == (1,)
+    assert pnl[0] == pytest.approx(-2.0)
+
+
+def test_pnl_hand_example_with_costs():
+    # Trades: buy 0.5 at 100, buy 0.5 at 110, sell 1.0 at 105 
+    # Costs:  0.01 * (0.5 * 100 + 0.5 * 110 + 1.0 * 105) = 0.01 * 210 = 2.10
+    # P&L:    -2 - 2.10 = -4.10
+    pnl = hedge_pnl(PATH, DELTAS, PAYOFF, P0, cost=0.01)
+    assert pnl[0] == pytest.approx(-4.10)
+
+
+def test_short_positions_also_cost():
+    # Costs depend on |trade|, so selling short costs the same as buying.
+    # In this example the trading gains are 0 for both, so the P&Ls must match.
+    pnl_long = hedge_pnl(PATH, DELTAS, PAYOFF, P0, cost=0.01)
+    pnl_short = hedge_pnl(PATH, -DELTAS, PAYOFF, P0, cost=0.01)
+    assert pnl_long[0] == pytest.approx(pnl_short[0])
+
+
+def test_costs_never_increase_pnl():
+    rng = np.random.default_rng(1)
+    paths = simulate_gbm(100, 0.0, 0.2, 1.0, 20, 500, seed=2)
+    deltas = rng.uniform(-1, 1, size=(500, 20))
+    payoff = call_payoff(paths[:, -1], 100)
+    pnl_free = hedge_pnl(paths, deltas, payoff, 8.0, cost=0.0)
+    pnl_costly = hedge_pnl(paths, deltas, payoff, 8.0, cost=0.005)
+    assert np.all(pnl_costly <= pnl_free)
+    assert np.any(pnl_costly < pnl_free)
+
+
+# ===========================================================================
+# Risk measures
+# ===========================================================================
+
+def test_var_and_cvar_hand_example():
+    # P&L = -1, ..., -100, i.e. losses 1, ..., 100.
+    # The worst 5% of losses are 96, ..., 100, with mean 98.
+    pnl = -np.arange(1, 101, dtype=float)
+    assert var(pnl, 0.95) == pytest.approx(95.05)
+    assert cvar(pnl, 0.95) == pytest.approx(98.0)
+
+
+def test_cvar_can_be_negative_if_even_the_worst_paths_make_money():
+    # P&L = 1, ..., 100: the worst 5% are the profits 1, ..., 5 (losses -1, ..., -5)
+    pnl = np.arange(1, 101, dtype=float)
+    assert cvar(pnl, 0.95) == pytest.approx(-3.0)
+
+
+def test_cvar_of_standard_normal():
+    # Known value: CVaR_95 of a standard normal is pdf(1.645) / 0.05 = 2.0627
+    rng = np.random.default_rng(3)
+    pnl = rng.standard_normal(1_000_000)
+    assert cvar(pnl, 0.95) == pytest.approx(2.0627, abs=0.01)
+
+
+def test_cvar_at_least_var_and_sensitive_to_tail():
+    rng = np.random.default_rng(4)
+    pnl = rng.standard_normal(10_000)
+    assert cvar(pnl) >= var(pnl)
+    # Make the single worst outcome much worse: CVaR must increase, VaR need not
+    worse = pnl.copy()
+    worse[np.argmin(worse)] -= 100
+    assert cvar(worse) > cvar(pnl)
+
+
+def test_risk_measures_accept_lists():
+    assert cvar([-1.0, -2.0, -3.0, -4.0], alpha=0.5) == pytest.approx(3.5)
+
+
+def test_summarize():
+    pnl = -np.arange(1, 101, dtype=float)
+    s = summarize(pnl)
+    assert s["mean"] == pytest.approx(-50.5)
+    assert s["std"] == pytest.approx(np.std(pnl, ddof=1))
+    assert s["var"] == pytest.approx(95.05)
+    assert s["cvar"] == pytest.approx(98.0)
+
+
+# ===========================================================================
+# Black-Scholes delta hedging
+# ===========================================================================
+
+S0, K, T, SIGMA = 100, 100, 30 / 252, 0.2
+
+
+def _delta_hedge_pnl(n_steps, cost, n_paths=50_000, seed=10):
+    # Risk-neutral world with r = mu = 0, premium = Black-Scholes price
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, n_steps, n_paths, seed=seed)
+    deltas = bs_delta_strategy(paths, K, T, 0.0, SIGMA)
+    p0 = call_price(S0, K, T, 0.0, SIGMA)
+    return hedge_pnl(paths, deltas, call_payoff(paths[:, -1], K), p0, cost)
+
+
+def test_delta_strategy_shape_and_first_delta():
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 100, seed=0)
+    deltas = bs_delta_strategy(paths, K, T, 0.0, SIGMA)
+    assert deltas.shape == (100, 30)
+    # At t_0 every path is at S0, so every delta equals the BS delta at S0
+    assert np.allclose(deltas[:, 0], call_delta(S0, K, T, 0.0, SIGMA))
+
+
+def test_delta_strategy_has_no_look_ahead():
+    # Changing the price at maturity must not change any decision
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 100, seed=0)
+    changed = paths.copy()
+    changed[:, -1] *= 2.0
+    assert np.array_equal(bs_delta_strategy(paths, K, T, 0.0, SIGMA),
+                          bs_delta_strategy(changed, K, T, 0.0, SIGMA))
+
+
+def test_delta_strategy_uses_remaining_time():
+    # Delta at step j must use time to maturity T - j * dt
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 10, seed=0)
+    deltas = bs_delta_strategy(paths, K, T, 0.0, SIGMA)
+    j, dt = 17, T / 30
+    assert np.allclose(deltas[:, j], call_delta(paths[:, j], K, T - j * dt, 0.0, SIGMA))
+
+
+def test_mean_pnl_is_zero_without_costs():
+    pnl = _delta_hedge_pnl(n_steps=30, cost=0.0)
+    standard_error = pnl.std(ddof=1) / np.sqrt(pnl.size)
+    assert abs(pnl.mean()) < 4 * standard_error
+
+
+def test_hedging_error_shrinks_like_one_over_sqrt_n():
+    # Four times more rebalancing -> hedging error about half as large
+    std_100 = _delta_hedge_pnl(n_steps=100, cost=0.0).std()
+    std_400 = _delta_hedge_pnl(n_steps=400, cost=0.0).std()
+    assert std_100 / std_400 == pytest.approx(2.0, rel=0.1)
+
+
+def test_hedge_reduces_risk_compared_to_no_hedge():
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 50_000, seed=11)
+    payoff = call_payoff(paths[:, -1], K)
+    p0 = call_price(S0, K, T, 0.0, SIGMA)
+    hedged = hedge_pnl(paths, bs_delta_strategy(paths, K, T, 0.0, SIGMA), payoff, p0, 0.0)
+    unhedged = hedge_pnl(paths, np.zeros((50_000, 30)), payoff, p0, 0.0)
+    assert hedged.std() < 0.2 * unhedged.std()
+    assert cvar(hedged) < cvar(unhedged)
+
+
+def test_costs_make_mean_pnl_negative():
+    pnl = _delta_hedge_pnl(n_steps=30, cost=0.001)
+    standard_error = pnl.std(ddof=1) / np.sqrt(pnl.size)
+    assert pnl.mean() < -4 * standard_error
