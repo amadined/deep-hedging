@@ -25,6 +25,7 @@ def simulate_gbm(s0, mu, sigma, T, n_steps, n_paths, seed=None):
         T           total time in years
         n_steps     number of time steps 
         n_paths     number of paths
+        seed        random seed for reproducibility
     Output:
         np.ndarray of shape (n_paths, n_steps + 1). Each row is one path,
         column 0 equals s0 and column j is the price at time j * T / n_steps.
