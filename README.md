@@ -35,6 +35,14 @@ Comparing Monte Carlo pricing to Black-Scholes exact pricing.
 | Put    | 42  | 40  | 0.5    | 10% | 20% | 0.8086        | 0.8072      | 0.0041     | -0.34 |
 | Call   | 100 | 105 | 30/252 | 0%  | 20% | 0.9980        | 1.0032      | 0.0057     | +0.92 |
 
+### Monte Carlo convergence
+
+The Monte Carlo error falls at the theoretical rate 1/√n: four times more
+paths halve the error. The reported standard error correctly predicts the size
+of the actual error (averaged over 20 seeds per path count).
+
+![Monte Carlo convergence](figures/mc_convergence.png)
+
 ## Repository structure
 
 ```
