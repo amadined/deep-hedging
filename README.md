@@ -17,7 +17,7 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 - [x] Black–Scholes pricer and delta
 - [x] Geometric Brownian motion simulator
 - [x] Monte Carlo pricing with standard errors, validated against Black–Scholes
-- [ ] Heston simulator and semi-analytic Heston pricer
+- [x] Heston simulator and semi-analytic Heston pricer
 - [ ] Classical hedging baselines: delta, Leland, Whalley–Wilmott
 - [ ] Deep hedging network with CVaR loss (PyTorch)
 - [ ] Experiments with transaction costs
@@ -67,6 +67,8 @@ pytest
 - S. Heston. *A Closed-Form Solution for Options with Stochastic Volatility.* Review of Financial Studies, 1993.
 - H. Leland. *Option Pricing and Replication with Transactions Costs.* Journal of Finance, 1985.
 - A. E. Whalley, P. Wilmott. *An Asymptotic Analysis of an Optimal Hedging Model for Option Pricing with Transaction Costs.* Mathematical Finance, 1997.
+- Lord, Koekkoek and van Dijk (2010), A comparison of biased simulation schemes for stochastic volatility models, Quantitative Finance.
+- Albrecher, Mayer, Schoutens and Tistaert (2007), The little Heston trap, Wilmott Magazine.
 
 ## License
 
