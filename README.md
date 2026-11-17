@@ -43,6 +43,18 @@ of the actual error (averaged over 20 seeds per path count).
 
 ![Monte Carlo convergence](figures/mc_convergence.png)
 
+### Delta hedging with transaction costs
+
+Hedging a short one-month at-the-money call with the Black–Scholes delta.
+Without costs, the hedging error falls like 1/√N in the number of rebalancing steps.
+With proportional transaction costs, more frequent rebalancing eventually *increases*
+risk: the CVaR is lowest at an intermediate frequency (around N = 100 for 0.1% costs,
+N = 20 for 0.5%). Plain delta hedging has no way to trade off hedging error against
+costs, which motivates cost-aware strategies and deep hedging.
+
+![Delta hedging error](figures/delta_hedging_error.png)
+![Risk vs rebalancing frequency](figures/delta_hedging_costs.png)
+
 ## Repository structure
 
 ```
