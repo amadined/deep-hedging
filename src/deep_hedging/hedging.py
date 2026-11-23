@@ -18,7 +18,7 @@ def hedge_pnl(paths, deltas, payoff, p0, cost):
         payoff      option payoffs, shape (n_paths,)
         p0          the premium
         cost        cost rate 
-    Ouput:
+    Output:
         the P&L of each path, an array of shape (n_paths,)
     """
     n_paths = paths.shape[0]

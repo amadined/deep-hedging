@@ -18,7 +18,7 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 - [x] Geometric Brownian motion simulator
 - [x] Monte Carlo pricing with standard errors, validated against Black–Scholes
 - [x] Heston simulator and semi-analytic Heston pricer
-- [ ] Classical hedging baselines: delta, Leland, Whalley–Wilmott
+- [x] Classical hedging baselines: delta, Leland, Whalley–Wilmott
 - [ ] Deep hedging network with CVaR loss (PyTorch)
 - [ ] Experiments with transaction costs
 - [ ] Experiments under Heston
