@@ -19,8 +19,8 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 - [x] Monte Carlo pricing with standard errors, validated against Black–Scholes
 - [x] Heston simulator and semi-analytic Heston pricer
 - [x] Classical hedging baselines: delta, Leland, Whalley–Wilmott
-- [ ] Deep hedging network with CVaR loss (PyTorch)
-- [ ] Experiments with transaction costs
+- [x] Deep hedging network with CVaR loss (PyTorch)
+- [x] Experiments with transaction costs
 - [ ] Experiments under Heston
 
 ## Results so far
@@ -65,6 +65,20 @@ tuned on separate training paths.
 
 ![CVaR vs rebalancing frequency](figures/cost_aware_cvar.png)
 ![Trading volume](figures/cost_aware_turnover.png)
+
+### Deep hedging
+
+A small neural network (3 → 32 → 32 → 1, previous position as input) trained by
+minimising the CVaR of the hedging losses, following Buehler et al. (2019).
+Without costs it recovers the Black–Scholes delta, except very close to maturity,
+where it learns a smoother hedge. With transaction costs it achieves the lowest
+CVaR of all strategies (2.23 vs 2.45 for the best classical strategy at 0.5% costs).
+Instead of a sharp no-trade band like Whalley–Wilmott, it learns to adjust its
+position only partially towards the delta.
+
+![Comparison of strategies](figures/deep_comparison.png)
+![Learned hedge vs delta](figures/deep_vs_delta.png)
+![Trading decisions](figures/deep_no_trade.png)
 
 ## Repository structure
 
