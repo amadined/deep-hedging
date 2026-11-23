@@ -2,12 +2,19 @@ import numpy as np
 import pytest
 import torch
 
-from deep_hedging.deep_hedger import cvar_torch, hedge_pnl_torch
+from deep_hedging.baselines import bs_delta_strategy
+from deep_hedging.black_scholes import call_price
+from deep_hedging.deep_hedger import (
+    DeepHedger,
+    cvar_torch,
+    deep_hedge_strategy,
+    hedge_pnl_torch,
+    train_hedger,
+)
 from deep_hedging.hedging import hedge_pnl
 from deep_hedging.models.gbm import simulate_gbm
 from deep_hedging.monte_carlo import call_payoff
 from deep_hedging.risk import cvar
-from deep_hedging.deep_hedger import DeepHedger, cvar_torch, hedge_pnl_torch
 
 
 # ===========================================================================
@@ -189,3 +196,75 @@ def test_gradients_reach_all_weights():
     for name, p in model.named_parameters():
         assert p.grad is not None, f"no gradient for {name}"
         assert torch.any(p.grad != 0), f"zero gradient for {name}"
+
+# ===========================================================================
+# Training
+# ===========================================================================
+
+# Small settings so the tests run in a few seconds (real training uses more)
+FAST = dict(k=100, T=30 / 252, sigma=0.2, n_steps=10, n_iters=200,
+            batch_size=2000, lr=5e-3, print_every=0)
+
+
+def _cvar_on_test_paths(deltas_fn, cost):
+    """CVaR of a strategy on fixed test paths, computed with the NumPy tools."""
+    paths = simulate_gbm(100, 0.0, 0.2, T, FAST["n_steps"], 5000, seed=0)
+    p0 = call_price(100, 100, T, 0.0, 0.2)
+    pnl = hedge_pnl(paths, deltas_fn(paths), call_payoff(paths[:, -1], 100), p0, cost)
+    return cvar(pnl)
+
+
+def test_train_returns_model_and_losses():
+    model, losses = train_hedger(cost=0.0, **{**FAST, "n_iters": 20})
+    assert isinstance(model, DeepHedger)
+    assert len(losses) == 20
+    assert all(np.isfinite(losses))
+
+
+def test_training_reduces_the_risk_on_new_paths():
+    # Untrained, the network hedges randomly. After a short training its CVaR on
+    # paths it has never seen must be far lower.
+    torch.manual_seed(0)
+    untrained = DeepHedger(k=100, T=T)
+    trained, _ = train_hedger(cost=0.001, **FAST)
+    cvar_untrained = _cvar_on_test_paths(lambda p: deep_hedge_strategy(untrained, p), 0.001)
+    cvar_trained = _cvar_on_test_paths(lambda p: deep_hedge_strategy(trained, p), 0.001)
+    assert cvar_trained < 0.5 * cvar_untrained
+
+
+def test_short_training_gets_close_to_delta_hedging():
+    # Even a short training run should come close to the Black-Scholes delta hedge.
+    # This also catches a sign error in the loss (minimising the CVaR of the P&L
+    # instead of the losses), which trains to a clearly worse strategy.
+    trained, _ = train_hedger(cost=0.001, **FAST)
+    cvar_deep = _cvar_on_test_paths(lambda p: deep_hedge_strategy(trained, p), 0.001)
+    cvar_delta = _cvar_on_test_paths(lambda p: bs_delta_strategy(p, 100, T, 0.0, 0.2), 0.001)
+    assert cvar_deep < 1.15 * cvar_delta
+
+
+def test_training_is_reproducible_with_seed():
+    model_a, losses_a = train_hedger(cost=0.001, seed=3, **{**FAST, "n_iters": 5})
+    model_b, losses_b = train_hedger(cost=0.001, seed=3, **{**FAST, "n_iters": 5})
+    assert losses_a == losses_b
+    for pa, pb in zip(model_a.parameters(), model_b.parameters()):
+        assert torch.equal(pa, pb)
+
+
+def test_different_seeds_give_different_models():
+    _, losses_a = train_hedger(cost=0.001, seed=1, **{**FAST, "n_iters": 5})
+    _, losses_b = train_hedger(cost=0.001, seed=2, **{**FAST, "n_iters": 5})
+    assert losses_a != losses_b
+
+
+def test_deep_hedge_strategy_returns_numpy_deltas():
+    torch.manual_seed(0)
+    model = DeepHedger(k=K, T=T)
+    paths = simulate_gbm(100, 0.0, 0.2, T, N_STEPS, 40, seed=0)
+    deltas = deep_hedge_strategy(model, paths)
+    assert isinstance(deltas, np.ndarray)
+    assert deltas.shape == (40, N_STEPS)
+    assert deltas.dtype == np.float64
+    # Same numbers as calling the model directly
+    with torch.no_grad():
+        direct = model(torch.tensor(paths, dtype=torch.float32)).numpy()
+    assert np.allclose(deltas, direct)
