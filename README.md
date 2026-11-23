@@ -55,6 +55,17 @@ costs, which motivates cost-aware strategies and deep hedging.
 ![Delta hedging error](figures/delta_hedging_error.png)
 ![Risk vs rebalancing frequency](figures/delta_hedging_costs.png)
 
+### Cost-aware hedging: Leland and Whalley–Wilmott
+
+With transaction costs, delta hedging trades too much: its risk explodes as the rebalancing
+frequency grows. Leland's adjusted volatility reduces this, and Whalley–Wilmott's no-trade band
+almost removes it: its trading volume and risk stay nearly constant however often trading is
+allowed. All strategies receive the Black–Scholes premium, Whalley–Wilmott's risk aversion is
+tuned on separate training paths.
+
+![CVaR vs rebalancing frequency](figures/cost_aware_cvar.png)
+![Trading volume](figures/cost_aware_turnover.png)
+
 ## Repository structure
 
 ```

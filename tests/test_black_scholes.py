@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from deep_hedging.black_scholes import call_delta, call_price, put_price
+from deep_hedging.black_scholes import call_delta, call_price, put_price, call_gamma
 
 
 def test_textbook_values():
@@ -36,3 +36,17 @@ def test_delta_bounds_and_monotonicity():
     delta = call_delta(s, 100, 0.5, 0.0, 0.2)
     assert np.all((delta > 0) & (delta < 1))
     assert np.all(np.diff(delta) > 0)  # more shares as the option goes into the money
+
+def test_gamma_matches_finite_difference_of_delta():
+    # Gamma is the derivative of delta with respect to S
+    s, k, t, r, sigma, h = 105, 100, 0.25, 0.01, 0.2, 1e-4
+    numerical = (call_delta(s + h, k, t, r, sigma) - call_delta(s - h, k, t, r, sigma)) / (2 * h)
+    assert call_gamma(s, k, t, r, sigma) == pytest.approx(numerical, rel=1e-6)
+
+
+def test_gamma_positive_and_largest_near_the_strike():
+    s = np.linspace(50, 150, 1001)
+    gamma = call_gamma(s, 100, 0.5, 0.0, 0.2)
+    assert np.all(gamma > 0)
+    # The peak lies close to the strike (slightly below it, at S = K * exp(-1.5 sigma^2 t))
+    assert 95 < s[np.argmax(gamma)] < 101

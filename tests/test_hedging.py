@@ -1,8 +1,13 @@
 import numpy as np
 import pytest
 
-from deep_hedging.baselines import bs_delta_strategy
-from deep_hedging.black_scholes import call_delta, call_price
+from deep_hedging.baselines import (
+    bs_delta_strategy,
+    leland_sigma,
+    leland_strategy,
+    whalley_wilmott_strategy,
+)
+from deep_hedging.black_scholes import call_delta, call_gamma, call_price
 from deep_hedging.hedging import hedge_pnl
 from deep_hedging.models.gbm import simulate_gbm
 from deep_hedging.monte_carlo import call_payoff
@@ -177,3 +182,141 @@ def test_costs_make_mean_pnl_negative():
     pnl = _delta_hedge_pnl(n_steps=30, cost=0.001)
     standard_error = pnl.std(ddof=1) / np.sqrt(pnl.size)
     assert pnl.mean() < -4 * standard_error
+
+# ===========================================================================
+# Leland
+# ===========================================================================
+
+def test_leland_sigma_hand_value():
+    # sigma = 0.2, c = 0.005 (round trip 0.01), dt = 1/252:
+    # Leland number = sqrt(2/pi) * 0.01 / (0.2 * sqrt(1/252)) = 0.6334
+    # sigma_hat = 0.2 * sqrt(1 + 0.6334) = 0.2556
+    assert leland_sigma(0.2, 0.005, 1 / 252) == pytest.approx(0.25561, abs=1e-4)
+
+
+def test_leland_sigma_without_costs_is_sigma():
+    assert leland_sigma(0.2, 0.0, 1 / 252) == pytest.approx(0.2)
+
+
+def test_leland_sigma_increases_with_costs_and_rebalancing_frequency():
+    assert leland_sigma(0.2, 0.001, 1 / 252) > 0.2
+    assert leland_sigma(0.2, 0.005, 1 / 252) > leland_sigma(0.2, 0.001, 1 / 252)
+    # Smaller dt = more frequent rebalancing = more costs = larger adjustment
+    assert leland_sigma(0.2, 0.001, 1 / 1000) > leland_sigma(0.2, 0.001, 1 / 252)
+
+
+def test_leland_strategy_without_costs_equals_delta_hedge():
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 200, seed=0)
+    assert np.allclose(
+        leland_strategy(paths, K, T, 0.0, SIGMA, cost=0.0),
+        bs_delta_strategy(paths, K, T, 0.0, SIGMA),
+    )
+
+
+def test_leland_strategy_uses_adjusted_sigma_with_correct_dt():
+    # With N = 30 steps, dt must be T / 30 (not T / 31)
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 200, seed=0)
+    sigma_hat = leland_sigma(SIGMA, 0.005, T / 30)
+    assert np.allclose(
+        leland_strategy(paths, K, T, 0.0, SIGMA, cost=0.005),
+        bs_delta_strategy(paths, K, T, 0.0, sigma_hat),
+    )
+
+
+# ===========================================================================
+# Whalley-Wilmott
+# ===========================================================================
+
+def _turnover(deltas):
+    """Average total number of shares traded per path, including entry and exit."""
+    n_paths = deltas.shape[0]
+    positions = np.hstack((np.zeros((n_paths, 1)), deltas, np.zeros((n_paths, 1))))
+    return np.abs(np.diff(positions, axis=1)).sum(axis=1).mean()
+
+
+def test_ww_without_costs_equals_delta_hedge():
+    # With cost = 0 the band has width 0
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 200, seed=0)
+    assert np.allclose(
+        whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, cost=0.0, risk_aversion=1.0),
+        bs_delta_strategy(paths, K, T, 0.0, SIGMA),
+    )
+
+
+def test_ww_shape():
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 200, seed=0)
+    deltas = whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, cost=0.005, risk_aversion=1.0)
+    assert deltas.shape == (200, 30)
+
+
+def test_ww_positions_stay_inside_the_band():
+    cost, risk_aversion, n_steps = 0.005, 1.0, 30
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, n_steps, 500, seed=1)
+    deltas = whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, cost, risk_aversion)
+    dt = T / n_steps
+    for j in range(n_steps):
+        s, tau = paths[:, j], T - j * dt
+        delta = call_delta(s, K, tau, 0.0, SIGMA)
+        gamma = call_gamma(s, K, tau, 0.0, SIGMA)
+        h = (1.5 * cost * s * gamma**2 / risk_aversion) ** (1 / 3)
+        assert np.all(deltas[:, j] >= delta - h - 1e-12)
+        assert np.all(deltas[:, j] <= delta + h + 1e-12)
+
+
+def test_ww_only_trades_when_outside_the_band():
+    # Whenever the position changes, the new position must lie on a band edge
+    cost, risk_aversion, n_steps = 0.005, 1.0, 30
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, n_steps, 500, seed=2)
+    deltas = whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, cost, risk_aversion)
+    dt = T / n_steps
+    for j in range(1, n_steps):
+        s, tau = paths[:, j], T - j * dt
+        delta = call_delta(s, K, tau, 0.0, SIGMA)
+        h = (1.5 * cost * s * call_gamma(s, K, tau, 0.0, SIGMA) ** 2 / risk_aversion) ** (1 / 3)
+        traded = deltas[:, j] != deltas[:, j - 1]
+        on_edge = np.isclose(deltas[:, j], delta - h) | np.isclose(deltas[:, j], delta + h)
+        assert np.all(on_edge[traded])
+
+
+def test_ww_trades_less_than_delta_hedge():
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 100, 5000, seed=3)
+    ww = whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, cost=0.005, risk_aversion=3.0)
+    bs = bs_delta_strategy(paths, K, T, 0.0, SIGMA)
+    assert _turnover(ww) < 0.6 * _turnover(bs)
+
+
+def test_ww_with_huge_risk_aversion_approaches_delta_hedge():
+    # A very risk-averse hedger has an almost zero band
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 200, seed=4)
+    ww = whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, cost=0.005, risk_aversion=1e9)
+    assert np.allclose(ww, bs_delta_strategy(paths, K, T, 0.0, SIGMA), atol=1e-3)
+
+
+def test_ww_has_no_look_ahead():
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 100, seed=5)
+    changed = paths.copy()
+    changed[:, -1] *= 2.0
+    assert np.array_equal(
+        whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, 0.005, 1.0),
+        whalley_wilmott_strategy(changed, K, T, 0.0, SIGMA, 0.005, 1.0),
+    )
+
+
+# ===========================================================================
+# Both strategies beat plain delta hedging when costs are high
+# ===========================================================================
+
+def test_cost_aware_strategies_reduce_risk():
+    cost, n_steps = 0.005, 100
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, n_steps, 50_000, seed=6)
+    payoff = call_payoff(paths[:, -1], K)
+    p0 = call_price(S0, K, T, 0.0, SIGMA)
+
+    def risk(deltas):
+        return cvar(hedge_pnl(paths, deltas, payoff, p0, cost))
+
+    cvar_bs = risk(bs_delta_strategy(paths, K, T, 0.0, SIGMA))
+    cvar_leland = risk(leland_strategy(paths, K, T, 0.0, SIGMA, cost))
+    cvar_ww = risk(whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, cost, risk_aversion=3.0))
+    assert cvar_leland < cvar_bs
+    assert cvar_ww < cvar_bs

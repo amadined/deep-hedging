@@ -38,3 +38,7 @@ def call_delta(s, k, t, r, sigma):
     """Delta of a European call: the number of shares held in the BS hedge."""
     d1, _ = _d1_d2(s, k, t, r, sigma)
     return norm.cdf(d1)
+
+def call_gamma(s, k, t, r, sigma):
+    d1, _ = _d1_d2(s, k, t, r, sigma)
+    return norm.pdf(d1) / (s * sigma * np.sqrt(t))

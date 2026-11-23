@@ -27,3 +27,17 @@ def hedge_pnl(paths, deltas, payoff, p0, cost):
     tr_costs = cost * np.sum(np.abs(np.diff(positions, axis=1)) * paths, axis=1)
     pnl = p0 - payoff + tr_gains - tr_costs
     return pnl
+
+def turnover(deltas):
+    """
+    Total number of shares traded on each path, including the initial
+    purchase and the final sale at maturity.
+
+    Input:
+        deltas      positions, shape (n_paths, N)
+    Output:
+        array of shape (n_paths,)
+    """
+    n_paths = deltas.shape[0]
+    positions = np.hstack((np.zeros((n_paths, 1)), deltas, np.zeros((n_paths, 1))))
+    return np.sum(np.abs(np.diff(positions, axis=1)), axis=1)
