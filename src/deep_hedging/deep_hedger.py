@@ -43,7 +43,52 @@ def cvar_torch(pnl, alpha=0.95):
 
 
 class DeepHedger(nn.Module):
-    ...   
+    """
+    Neural network hedging strategy (Buehler et al., 2019).
+
+    At each time t_j, a small MLP maps (log(S_j / K), time to maturity,
+    previous position) to the new position delta_j. The same MLP is used
+    at every time step. The previous position is an input so that the
+    network can learn not to trade when trading is not worth the cost.
+
+    Input of forward:
+        paths       prices at t_0, ..., t_N, tensor of shape (n_paths, N + 1)
+    Output of forward:
+        deltas      positions, tensor of shape (n_paths, N)
+    """
+
+    def __init__(self, k, T, hidden=32):
+        super().__init__()          
+        self.k = k
+        self.T = T
+        self.net = nn.Sequential(
+            nn.Linear(3, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, 1),
+        )
+
+    def forward(self, paths):
+        n_paths = paths.shape[0]             
+        n_steps = paths.shape[1] - 1                  
+        dt = self.T / n_steps
+
+        prev = torch.zeros(n_paths, dtype=paths.dtype)   # no shares before t_0
+        deltas = []
+
+        for j in range(n_steps):
+            log_moneyness = torch.log(paths[:, j] / self.k)                     # log(S_j / K) for all paths, shape (n_paths,)
+            tau = torch.full((n_paths,), self.T - j, dtype=paths.dtype)         # time left at t_j
+
+            x = torch.stack([log_moneyness, tau, prev], dim=1)                  # (n_paths, 3)
+            delta = self.net(x).squeeze(1)                                      # (n_paths,)
+
+            deltas.append(delta)
+            prev = delta
+
+        return torch.stack(deltas, dim=1)                                       # (n_paths, n_steps)
+
 
 
 def train_hedger():
