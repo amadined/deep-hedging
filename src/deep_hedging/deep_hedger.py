@@ -82,7 +82,7 @@ class DeepHedger(nn.Module):
 
         for j in range(n_steps):
             log_moneyness = torch.log(paths[:, j] / self.k)                     # log(S_j / K) for all paths, shape (n_paths,)
-            tau = torch.full((n_paths,), self.T - j, dtype=paths.dtype)         # time left at t_j
+            tau = torch.full((n_paths,), self.T - j * dt, dtype=paths.dtype)    # time left at t_j
 
             x = torch.stack([log_moneyness, tau, prev], dim=1)                  # (n_paths, 3)
             delta = self.net(x).squeeze(1)                                      # (n_paths,)

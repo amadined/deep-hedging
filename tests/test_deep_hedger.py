@@ -197,6 +197,26 @@ def test_gradients_reach_all_weights():
         assert p.grad is not None, f"no gradient for {name}"
         assert torch.any(p.grad != 0), f"zero gradient for {name}"
 
+def test_model_inputs_are_correct():
+    # Record what the MLP receives at every time step and check each input column:
+    # 0 = log(S_j / K), 1 = time to maturity T - j * dt, 2 = previous position
+    torch.manual_seed(0)
+    model = DeepHedger(k=K, T=T)
+    paths = _paths(10)
+    inputs = []
+    hook = model.net.register_forward_hook(lambda module, args, output: inputs.append(args[0]))
+    with torch.no_grad():
+        deltas = model(paths)
+    hook.remove()
+
+    assert len(inputs) == N_STEPS
+    dt = T / N_STEPS
+    for j, x in enumerate(inputs):
+        assert torch.allclose(x[:, 0], torch.log(paths[:, j] / K))
+        assert torch.allclose(x[:, 1], torch.full((10,), T - j * dt))
+        previous = torch.zeros(10) if j == 0 else deltas[:, j - 1]
+        assert torch.allclose(x[:, 2], previous)
+
 # ===========================================================================
 # Training
 # ===========================================================================
