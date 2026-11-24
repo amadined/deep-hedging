@@ -3,6 +3,7 @@ import pytest
 
 from deep_hedging.baselines import (
     bs_delta_strategy,
+    bs_delta_strategy_current_vol,
     leland_sigma,
     leland_strategy,
     whalley_wilmott_strategy,
@@ -10,6 +11,7 @@ from deep_hedging.baselines import (
 from deep_hedging.black_scholes import call_delta, call_gamma, call_price
 from deep_hedging.hedging import hedge_pnl
 from deep_hedging.models.gbm import simulate_gbm
+from deep_hedging.models.heston import simulate_heston
 from deep_hedging.monte_carlo import call_payoff
 from deep_hedging.risk import cvar, summarize, var
 
@@ -320,3 +322,48 @@ def test_cost_aware_strategies_reduce_risk():
     cvar_ww = risk(whalley_wilmott_strategy(paths, K, T, 0.0, SIGMA, cost, risk_aversion=3.0))
     assert cvar_leland < cvar_bs
     assert cvar_ww < cvar_bs
+
+
+# ===========================================================================
+# Black-Scholes delta with the current volatility
+# ===========================================================================
+
+def test_current_vol_delta_with_constant_variance_equals_delta_hedge():
+    # If the variance never changes, using the current volatility is the same
+    # as using the fixed volatility sqrt(v)
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 200, seed=0)
+    variances = np.full_like(paths, SIGMA**2)
+    assert np.allclose(
+        bs_delta_strategy_current_vol(paths, variances, K, T, 0.0),
+        bs_delta_strategy(paths, K, T, 0.0, SIGMA),
+    )
+
+
+def test_current_vol_delta_uses_the_variance_at_each_step():
+    heston = dict(v0=0.04, kappa=1.5, theta=0.04, xi=0.5, rho=-0.7)
+    paths, variances = simulate_heston(s0=S0, mu=0.0, T=T, n_steps=30, n_paths=100, seed=1, **heston)
+    deltas = bs_delta_strategy_current_vol(paths, variances, K, T, 0.0)
+    assert deltas.shape == (100, 30)
+    j, dt = 12, T / 30
+    sigma_j = np.sqrt(np.maximum(variances[:, j], 1e-8))
+    assert np.allclose(deltas[:, j], call_delta(paths[:, j], K, T - j * dt, 0.0, sigma_j))
+
+
+def test_current_vol_delta_handles_zero_and_negative_variances():
+    paths = simulate_gbm(S0, 0.0, SIGMA, T, 30, 50, seed=0)
+    variances = np.full_like(paths, SIGMA**2)
+    variances[:, 5] = 0.0
+    variances[:, 6] = -0.001
+    assert np.all(np.isfinite(bs_delta_strategy_current_vol(paths, variances, K, T, 0.0)))
+
+
+def test_current_vol_delta_has_no_look_ahead():
+    heston = dict(v0=0.04, kappa=1.5, theta=0.04, xi=0.5, rho=-0.7)
+    paths, variances = simulate_heston(s0=S0, mu=0.0, T=T, n_steps=30, n_paths=100, seed=2, **heston)
+    changed = variances.copy()
+    changed[:, -1] *= 3.0
+    assert np.array_equal(
+        bs_delta_strategy_current_vol(paths, variances, K, T, 0.0),
+        bs_delta_strategy_current_vol(paths, changed, K, T, 0.0),
+    )
+

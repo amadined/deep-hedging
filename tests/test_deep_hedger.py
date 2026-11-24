@@ -10,9 +10,11 @@ from deep_hedging.deep_hedger import (
     deep_hedge_strategy,
     hedge_pnl_torch,
     train_hedger,
+    train_hedger_heston,
 )
 from deep_hedging.hedging import hedge_pnl
 from deep_hedging.models.gbm import simulate_gbm
+from deep_hedging.models.heston import simulate_heston
 from deep_hedging.monte_carlo import call_payoff
 from deep_hedging.risk import cvar
 
@@ -288,3 +290,135 @@ def test_deep_hedge_strategy_returns_numpy_deltas():
     with torch.no_grad():
         direct = model(torch.tensor(paths, dtype=torch.float32)).numpy()
     assert np.allclose(deltas, direct)
+
+
+# ===========================================================================
+# Variance input (for stochastic volatility models)
+# ===========================================================================
+
+HESTON = dict(v0=0.04, kappa=1.5, theta=0.04, xi=0.5, rho=-0.7)
+
+
+def _heston_paths(n_paths, n_steps=N_STEPS, seed=0):
+    paths, variances = simulate_heston(s0=100, mu=0.0, T=T, n_steps=n_steps,
+                                       n_paths=n_paths, seed=seed, **HESTON)
+    return torch.tensor(paths, dtype=torch.float32), torch.tensor(variances, dtype=torch.float32)
+
+
+def test_model_with_variance_has_one_more_input():
+    # The first layer gets a fourth input: 32 more weights than the default 1217
+    model = DeepHedger(k=K, T=T, use_variance=True)
+    assert sum(p.numel() for p in model.parameters()) == 1217 + 32
+
+
+def test_model_with_variance_output_shape():
+    torch.manual_seed(0)
+    model = DeepHedger(k=K, T=T, use_variance=True)
+    paths, variances = _heston_paths(50)
+    deltas = model(paths, variances)
+    assert deltas.shape == (50, N_STEPS)
+    assert torch.all(torch.isfinite(deltas))
+
+
+def test_model_with_variance_needs_variances():
+    model = DeepHedger(k=K, T=T, use_variance=True)
+    paths, _ = _heston_paths(10)
+    with pytest.raises(ValueError):
+        model(paths)
+
+
+def test_model_without_variance_ignores_variances():
+    # The default model must give the same result whether or not variances are passed
+    torch.manual_seed(0)
+    model = DeepHedger(k=K, T=T)
+    paths, variances = _heston_paths(20)
+    with torch.no_grad():
+        assert torch.equal(model(paths), model(paths, variances))
+
+
+def test_model_with_variance_inputs_are_correct():
+    # The fourth input column must be the current volatility sqrt(max(v_j, 0))
+    torch.manual_seed(0)
+    model = DeepHedger(k=K, T=T, use_variance=True)
+    paths, variances = _heston_paths(10)
+    inputs = []
+    hook = model.net.register_forward_hook(lambda module, args, output: inputs.append(args[0]))
+    with torch.no_grad():
+        deltas = model(paths, variances)
+    hook.remove()
+
+    dt = T / N_STEPS
+    for j, x in enumerate(inputs):
+        assert x.shape == (10, 4)
+        assert torch.allclose(x[:, 0], torch.log(paths[:, j] / K))
+        assert torch.allclose(x[:, 1], torch.full((10,), T - j * dt))
+        previous = torch.zeros(10) if j == 0 else deltas[:, j - 1]
+        assert torch.allclose(x[:, 2], previous)
+        assert torch.allclose(x[:, 3], torch.sqrt(torch.clamp(variances[:, j], min=0)))
+
+
+def test_model_with_variance_handles_negative_raw_variances():
+    # Raw Heston variances can be slightly negative: no NaN allowed
+    torch.manual_seed(0)
+    model = DeepHedger(k=K, T=T, use_variance=True)
+    paths, variances = _heston_paths(10)
+    variances[:, 5] = -0.001
+    with torch.no_grad():
+        assert torch.all(torch.isfinite(model(paths, variances)))
+
+
+def test_model_with_variance_has_no_look_ahead():
+    # Changing the variance (or price) at maturity must not change any decision
+    torch.manual_seed(0)
+    model = DeepHedger(k=K, T=T, use_variance=True)
+    paths, variances = _heston_paths(20)
+    changed_v = variances.clone()
+    changed_v[:, -1] *= 3.0
+    with torch.no_grad():
+        assert torch.equal(model(paths, variances), model(paths, changed_v))
+
+
+def test_deep_hedge_strategy_with_variances():
+    torch.manual_seed(0)
+    model = DeepHedger(k=K, T=T, use_variance=True)
+    paths, variances = simulate_heston(s0=100, mu=0.0, T=T, n_steps=N_STEPS,
+                                       n_paths=40, seed=0, **HESTON)
+    deltas = deep_hedge_strategy(model, paths, variances)
+    assert deltas.shape == (40, N_STEPS)
+    assert deltas.dtype == np.float64
+
+
+# ===========================================================================
+# Training on Heston paths
+# ===========================================================================
+
+FAST_HESTON = dict(k=100, T=30 / 252, heston=HESTON, n_steps=10, n_iters=200,
+                   batch_size=2000, lr=5e-3, print_every=0)
+
+
+def _heston_cvar_on_test_paths(model, cost):
+    """CVaR of a deep hedger on fixed Heston test paths, with the NumPy tools."""
+    from deep_hedging.heston_pricing import heston_call_price
+
+    paths, variances = simulate_heston(s0=100, mu=0.0, T=T, n_steps=FAST_HESTON["n_steps"],
+                                       n_paths=5000, seed=0, **HESTON)
+    p0 = heston_call_price(100, 100, T, 0.0, **HESTON)
+    deltas = deep_hedge_strategy(model, paths, variances)
+    return cvar(hedge_pnl(paths, deltas, call_payoff(paths[:, -1], 100), p0, cost))
+
+
+@pytest.mark.parametrize("use_variance", [False, True])
+def test_heston_training_reduces_the_risk(use_variance):
+    torch.manual_seed(0)
+    untrained = DeepHedger(k=100, T=T, use_variance=use_variance)
+    trained, losses = train_hedger_heston(cost=0.001, use_variance=use_variance, **FAST_HESTON)
+    assert trained.use_variance == use_variance
+    assert len(losses) == FAST_HESTON["n_iters"]
+    assert _heston_cvar_on_test_paths(trained, 0.001) < 0.5 * _heston_cvar_on_test_paths(untrained, 0.001)
+
+
+def test_heston_training_is_reproducible_with_seed():
+    _, losses_a = train_hedger_heston(cost=0.001, seed=3, **{**FAST_HESTON, "n_iters": 5})
+    _, losses_b = train_hedger_heston(cost=0.001, seed=3, **{**FAST_HESTON, "n_iters": 5})
+    assert losses_a == losses_b
+

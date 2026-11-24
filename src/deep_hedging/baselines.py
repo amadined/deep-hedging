@@ -23,6 +23,33 @@ def bs_delta_strategy(paths, k, T, r, sigma):
     deltas = call_delta(paths[:, :-1], k, tau, r, sigma)
     return deltas
 
+def bs_delta_strategy_current_vol(paths, variances, k, T, r):
+    """
+    Black-Scholes delta hedge that uses the current volatility.
+
+    For stochastic volatility models such as Heston: at each t_j, hold the
+    Black-Scholes delta computed with sigma_j = sqrt(v_j), the volatility
+    observed at that time, instead of a fixed sigma. This is a common
+    practitioner approach, but it ignores how the volatility moves and its
+    correlation with the stock price.
+
+    Input:
+        paths       prices at t_0, ..., t_N for each path, shape (n_paths, N + 1)
+        variances   variances at t_0, ..., t_N, same shape as paths
+        k           strike
+        T           time to maturity in years at t_0
+        r           risk-free rate
+    Output:
+        deltas, shape (n_paths, N)
+    """
+    N = paths.shape[1] - 1
+    tau = T - np.arange(N) * T / N
+    # Floor the variance: raw Heston variances can be 0 or slightly negative,
+    # and sigma = 0 would divide by zero in d1.
+    sigma = np.sqrt(np.maximum(variances[:, :-1], 1e-8))
+    return call_delta(paths[:, :-1], k, tau, r, sigma)
+
+
 def leland_sigma(sigma, cost, dt):
     """
     Leland (1985) adjusted volatility for a short option position.
