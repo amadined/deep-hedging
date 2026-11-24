@@ -80,6 +80,18 @@ position only partially towards the delta.
 ![Learned hedge vs delta](figures/deep_vs_delta.png)
 ![Trading decisions](figures/deep_no_trade.png)
 
+### Hedging under Heston stochastic volatility
+
+With random volatility the Black–Scholes delta is misspecified and the stock alone cannot
+hedge all risk. Deep hedgers trained on Heston paths have the lowest CVaR (1.50 without
+costs, 2.70 with 0.5% costs), clearly better than Black–Scholes deltas with fixed (1.73 / 3.68)
+or current volatility (1.61 / 3.29). Networks trained on GBM transfer reasonably but lose to
+those trained in the right model. Even the best strategy keeps more risk than in the
+Black–Scholes world (1.50 vs 0.98): the cost of an incomplete market.
+
+![Heston comparison](figures/heston_comparison.png)
+![Incompleteness](figures/heston_incompleteness.png)
+
 ## Repository structure
 
 ```
