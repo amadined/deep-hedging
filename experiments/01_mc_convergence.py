@@ -1,4 +1,10 @@
-"""Experiment 01: <what it shows>.
+"""Experiment 01: convergence of the Monte Carlo price to the Black-Scholes price.
+
+Prices a one-month at-the-money call by Monte Carlo with an increasing number
+of paths n and compares it with the exact Black-Scholes price. Both the actual
+error |MC price - BS price| and the reported standard error should fall like
+1/sqrt(n). Each experiment is repeated with different seeds and averaged. The
+three panels show how the curves smooth out with 10, 20 and 100 seeds.
 
 Run from the repository root:
     python experiments/01_mc_convergence.py
@@ -17,50 +23,53 @@ from deep_hedging.models.gbm import simulate_gbm
 
 
 S0, K, T, R, SIGMA = 100, 100, 30 / 252, 0.0, 0.2
-N_SEEDS = 20
+N_SEEDS_LIST = [10, 20, 100]        # one panel per number of seeds
 PRICE_EXACT = call_price(S0, K, T, R, SIGMA)
+FIGURES = Path("figures")
 
 
 def main():
-    # 1. compute the results (loops over parameters, simulations)
-    # 2. print a small table to the terminal
-    # 3. make the figure(s) and save them
-    
-    path_counts = 2 ** np.arange(8, 19)
-    print(PRICE_EXACT)
-    print(path_counts)
+    path_counts = 2 ** np.arange(8, 19)   # 256, 512, ..., 262144 paths
+    max_seeds = max(N_SEEDS_LIST)
+    print(f"Black-Scholes price: {PRICE_EXACT:.4f}")
 
-    mean_errors = np.empty((11,))
-    mean_ses = np.empty((11,))
-
+    # Run every path count with seeds 0, ..., max_seeds - 1 once and store the
+    # results. The panel with 10 seeds then averages the first 10 runs, the
+    # panel with 20 seeds the first 20, and so on, so nothing is simulated twice.
+    errors = np.empty((len(path_counts), max_seeds))
+    ses = np.empty((len(path_counts), max_seeds))
     for i, n in enumerate(path_counts):
-        errors = np.empty((N_SEEDS,))
-        ses = np.empty((N_SEEDS,))
-        for seed in range(N_SEEDS):
+        for seed in range(max_seeds):
             paths = simulate_gbm(S0, R, SIGMA, T, n_steps=1, n_paths=n, seed=seed)
             price_mc, se = mc_price(call_payoff(paths[:, -1], K), R, T)
-            errors[seed] = np.abs(price_mc - PRICE_EXACT)
-            ses[seed] = se
-        
-        mean_errors[i] = np.mean(errors)
-        mean_ses[i] = np.mean(ses)
+            errors[i, seed] = np.abs(price_mc - PRICE_EXACT)
+            ses[i, seed] = se
 
-        print(f"n = {n:>7d}   mean |error| = {mean_errors[i]:.5f}   mean SE = {mean_ses[i]:.5f}")
+    fig, axes = plt.subplots(1, len(N_SEEDS_LIST), figsize=(14, 4), sharey=True)
+    for ax, n_seeds in zip(axes, N_SEEDS_LIST):
+        mean_errors = errors[:, :n_seeds].mean(axis=1)
+        mean_ses = ses[:, :n_seeds].mean(axis=1)
 
+        print(f"\n{n_seeds} seeds")
+        for n, err, se in zip(path_counts, mean_errors, mean_ses):
+            print(f"n = {n:>7d}   mean |error| = {err:.5f}   mean SE = {se:.5f}   ratio = {err / se:.2f}")
 
-    reference = mean_ses[0] * np.sqrt(path_counts[0] / path_counts)
+        reference = mean_ses[0] * np.sqrt(path_counts[0] / path_counts)
+        ax.loglog(path_counts, mean_errors, "o-", label="mean |MC price − BS price|")
+        ax.loglog(path_counts, mean_ses, "s--", label="mean standard error")
+        ax.loglog(path_counts, reference, ":", color="grey", label=r"$\propto 1/\sqrt{n}$")
+        ax.set_xlabel("number of simulated paths n")
+        ax.set_title(f"averaged over {n_seeds} seeds")
+        ax.grid(True, which="both", alpha=0.3)
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.loglog(path_counts, mean_errors, "o-", label=f"mean |MC price - BS price|")
-    ax.loglog(path_counts, mean_ses, "s--", label=f"mean standard error" )
-    ax.loglog(path_counts, reference, ":", color="grey", label=r"$\propto 1/\sqrt{n}$")
-    ax.legend()
-    ax.set_xlabel(f"number of simulated paths n")
-    ax.set_ylabel(f"error")
-    ax.set_title(f"Monte Carlo convergence")
-    ax.grid(True, which="both", alpha=0.3)
+    axes[0].set_ylabel("error")
+    axes[0].legend()
+    fig.suptitle(f"Monte Carlo convergence, ATM call (Black–Scholes price {PRICE_EXACT:.3f})")
     fig.tight_layout()
-    fig.savefig("figures/mc_convergence.png", dpi=150)
+    FIGURES.mkdir(exist_ok=True)
+    fig.savefig(FIGURES / "mc_convergence.png", dpi=150)
+    plt.close(fig)
+    print(f"\nSaved {FIGURES / 'mc_convergence.png'}")
 
 
 if __name__ == "__main__":

@@ -46,11 +46,18 @@ and we conclude that the Black-Scholes price and the Monte Carlo price agree up 
 
 ### Monte Carlo convergence
 
-The Monte Carlo error falls at the theoretical rate 1/√n: four times more
-paths halve the error. The reported standard error correctly predicts the size
-of the actual error (averaged over 20 seeds per path count).
+We price a one-month at-the-money call option by Monte Carlo with an increasing number of paths n
+(doubling each time). For each n we compute the error |MC price − BS price| and the standard error.
+Then we take for both the average over different independent repetitions (seeds). The figure shows
+the averages over 10, 20 and 100 seeds.
 
 ![Monte Carlo convergence](figures/mc_convergence.png)
+
+Both curves fall at the theoretical rate 1/√n. The mean standard error stays almost the same in all
+three plots, because it is computed from the sample standard deviation of the payoffs, which barely
+depends on the seed. The actual error of a single run is random, so we see more fluctuations in the
+mean error, which smooth out as the number of seeds grows. At 100 seeds the mean error is approximately
+0.8 times the mean standard error, the theoretical value √(2/π) ≈ 0.80 for normally distributed errors.
 
 ### Delta hedging with transaction costs
 
