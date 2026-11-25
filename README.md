@@ -14,17 +14,6 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 - With transaction costs, does it learn to trade less, and how does it compare with the Leland and Whalley–Wilmott strategies?
 - Under Heston stochastic volatility, how much better is it than the misspecified Black–Scholes delta?
 
-## Roadmap
-
-- Black–Scholes pricer and delta
-- Geometric Brownian motion simulator
-- Monte Carlo pricing with standard errors, validated against Black–Scholes
-- Heston simulator and semi-analytic Heston pricer
-- Classical hedging baselines: delta, Leland, Whalley–Wilmott
-- Deep hedging network with CVaR loss (PyTorch)
-- Experiments with transaction costs
-- Experiments under Heston
-
 ## Results
 
 ### Comparison Black-Scholes price vs. Monte Carlo price
@@ -108,6 +97,20 @@ Black–Scholes world (1.50 vs 0.98): the cost of an incomplete market.
 ![Heston comparison](figures/heston_comparison.png)
 ![Incompleteness](figures/heston_incompleteness.png)
 
+## Extensions
+
+- [] Repeat the training with several seeds.
+- [] Better inputs near maturity.
+- [] Other risk measures.
+
+## Future work
+
+- A second hedging instrument under Heston.
+- Other types of options.
+- Work with real market data.
+- Other volatility models. (rough Bergomi)
+
+
 ## Repository structure
 
 ```
@@ -141,7 +144,7 @@ pytest
 
 ## Running the experiments
 
-Run each script from the repository root; figures are written to `figures/`.
+Run each script from the repository root. Figures are written to `figures/`.
 
 ```bash
 python experiments/00_mc_validation.py      # Monte Carlo vs Black–Scholes prices (table)
