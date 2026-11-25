@@ -12,8 +12,8 @@ figures can be regenerated without retraining. Delete models/ to retrain.
 Run from the repository root:
     python experiments/04_deep_hedging.py
 
-Saves figures/deep_training.png, figures/deep_vs_delta.png,
-figures/deep_comparison.png and figures/deep_no_trade.png,
+Saves figures/deep_comparison.png (training curves and risk of all strategies),
+figures/deep_vs_delta.png and figures/deep_no_trade.png,
 and prints a Markdown table.
 """
 
@@ -121,18 +121,35 @@ def main():
 
     FIGURES.mkdir(exist_ok=True)
 
-    # --- Figure 1: training curves ---------------------------------------
-    fig, ax = plt.subplots(figsize=(6, 4))
+    # --- Figure 1: training curves and hedging risk of all strategies -----
+    # Left: the training loss of the three deep hedgers.
+    # Right: the CVaR of all strategies on the test paths.
+    fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(13, 4.5))
+
     for cost in COSTS:
-        ax.plot(losses[cost], linewidth=0.8, label=f"cost {cost:.1%}")
-    ax.set_xlabel("training iteration")
-    ax.set_ylabel(f"CVaR {ALPHA:.0%} loss (training batch)")
-    ax.set_ylim(0, 6)
-    ax.set_title("Training of the deep hedgers")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+        ax_left.plot(losses[cost], linewidth=0.8, label=f"cost {cost:.1%}")
+    ax_left.set_xlabel("training iteration")
+    ax_left.set_ylabel(f"CVaR {ALPHA:.0%} loss (training batch)")
+    ax_left.set_ylim(0, 6)
+    ax_left.set_title("Training of the deep hedgers")
+    ax_left.grid(True, alpha=0.3)
+    ax_left.legend()
+
+    width = 0.2
+    x = np.arange(len(COSTS))
+    for i, name in enumerate(STRATEGIES):
+        values = [results[c][name]["cvar"] for c in COSTS]
+        ax_right.bar(x + (i - 1.5) * width, values, width, label=name)
+    ax_right.set_xticks(x)
+    ax_right.set_xticklabels([f"cost {c:.1%}" for c in COSTS])
+    ax_right.set_ylabel(f"CVaR {ALPHA:.0%} of loss")
+    ax_right.set_title("Hedging risk on test paths")
+    ax_right.grid(True, axis="y", alpha=0.3)
+    ax_right.legend()
+
+    fig.suptitle("Deep hedging vs classical strategies (N = 30, Black-Scholes premium)")
     fig.tight_layout()
-    fig.savefig(FIGURES / "deep_training.png", dpi=150)
+    fig.savefig(FIGURES / "deep_comparison.png", dpi=150)
     plt.close(fig)
 
     # --- Figure 2: learned hedge vs Black-Scholes delta (no costs) ---------
@@ -160,24 +177,7 @@ def main():
     fig.savefig(FIGURES / "deep_vs_delta.png", dpi=150)
     plt.close(fig)
 
-    # --- Figure 3: CVaR of all strategies --------------------------------
-    width = 0.2
-    x = np.arange(len(COSTS))
-    fig, ax = plt.subplots(figsize=(7, 4))
-    for i, name in enumerate(STRATEGIES):
-        values = [results[c][name]["cvar"] for c in COSTS]
-        ax.bar(x + (i - 1.5) * width, values, width, label=name)
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"cost {c:.1%}" for c in COSTS])
-    ax.set_ylabel(f"CVaR {ALPHA:.0%} of loss")
-    ax.set_title("Hedging risk on test paths (N = 30, Black-Scholes premium)")
-    ax.grid(True, axis="y", alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(FIGURES / "deep_comparison.png", dpi=150)
-    plt.close(fig)
-
-    # --- Figure 4: learned no-trade behaviour (cost 0.5%) -----------------
+    # --- Figure 3: learned no-trade behaviour (cost 0.5%) -----------------
     # x: how far the previous position is from the Black-Scholes delta
     # y: how much the strategy trades. A no-trade band shows up as a flat
     # region around x = 0 where the strategy does not trade.

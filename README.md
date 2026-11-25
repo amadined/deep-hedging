@@ -87,14 +87,15 @@ empirically as the γ with the lowest CVaR on separate training paths.
 ### Deep hedging
 
 A small neural network (3 → 32 → 32 → 1, previous position as input) trained by
-minimising the CVaR of the hedging losses, following Buehler et al. (2019).
+minimising the CVaR of the hedging losses, following Buehler et al. (2019). The 
+training loss of the three networks drops sharply in the first 200 iterations and then flattens.
 Without costs it recovers the Black–Scholes delta, except very close to maturity,
 where it learns a smoother hedge. With transaction costs it achieves the lowest
 CVaR of all strategies (2.23 vs 2.45 for the best classical strategy at 0.5% costs).
 Instead of a sharp no-trade band like Whalley–Wilmott, it learns to adjust its
 position only partially towards the delta.
 
-![Comparison of strategies](figures/deep_comparison.png)
+![Training and comparison of strategies](figures/deep_comparison.png)
 ![Learned hedge vs delta](figures/deep_vs_delta.png)
 ![Trading decisions](figures/deep_no_trade.png)
 
