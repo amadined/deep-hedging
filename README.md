@@ -104,18 +104,27 @@ position only partially towards the delta.
 With random volatility the Black–Scholes delta is misspecified and the stock alone cannot
 hedge all risk. Deep hedgers trained on Heston paths have the lowest CVaR (1.50 without
 costs, 2.70 with 0.5% costs), clearly better than Black–Scholes deltas with fixed (1.73 / 3.68)
-or current volatility (1.61 / 3.29). Networks trained on GBM transfer reasonably but lose to
+or current volatility (1.61 / 3.29). Networks trained on GBM perform reasonably but lose to
 those trained in the right model. Even the best strategy keeps more risk than in the
-Black–Scholes world (1.50 vs 0.98): the cost of an incomplete market.
+Black–Scholes world (1.50 vs 0.98).
 
-![Heston comparison](figures/heston_comparison.png)
-![Incompleteness](figures/heston_incompleteness.png)
+![Hedging risk under Heston and the price of incompleteness](figures/heston_comparison.png)
+
+Compared with the Black–Scholes delta at today's volatility, the network holds fewer shares
+above the strike and slightly more below it, most strongly when volatility is low. Two effects
+explain this. First, in the Heston model a low volatility tends to rise back towards its average,
+so the stock will likely move more than today's volatility suggests. The network therefore uses
+a smoother, less all-or-nothing hedge than the low-volatility Black–Scholes delta. Second, falling
+prices usually come with rising volatility (ρ < 0), which makes the option lose less value when
+the stock falls, so fewer shares are needed overall.
+
+![Deep hedge vs Black–Scholes delta with current volatility](figures/heston_skew_adjustment.png)
 
 ## Extensions
 
-- [] Repeat the training with several seeds.
-- [] Better inputs near maturity.
-- [] Other risk measures.
+-[] Repeat the training with several seeds.
+-[] Better inputs near maturity.
+-[] Other risk measures.
 
 ## Future work
 
@@ -175,8 +184,8 @@ saved in `models/` and reused on later runs. Delete that folder to retrain from 
 
 ## References
 
-- J. C. Hull. *Options, Futures, and Other Derivatives.* 7th ed. Pearson Prentice Hall, 2009.
 - H. Buehler, L. Gonon, J. Teichmann, B. Wood. *Deep Hedging.* Quantitative Finance 19(8), 2019.
+- J. C. Hull. *Options, Futures, and Other Derivatives.* 7th ed. Pearson Prentice Hall, 2009.
 - F. Black, M. Scholes. *The Pricing of Options and Corporate Liabilities.* Journal of Political Economy, 1973.
 - S. Heston. *A Closed-Form Solution for Options with Stochastic Volatility.* Review of Financial Studies, 1993.
 - H. Leland. *Option Pricing and Replication with Transactions Costs.* Journal of Finance, 1985.

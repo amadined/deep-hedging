@@ -20,8 +20,8 @@ models are saved in models/ and reused on the next run.
 Run from the repository root:
     python experiments/05_heston_hedging.py
 
-Saves figures/heston_comparison.png, figures/heston_incompleteness.png and
-figures/heston_skew_adjustment.png, and prints a Markdown table.
+Saves figures/heston_comparison.png (risk of all strategies and the price of
+incompleteness) and figures/heston_skew_adjustment.png, and prints a Markdown table.
 """
 
 from pathlib import Path
@@ -159,43 +159,46 @@ def main():
 
     FIGURES.mkdir(exist_ok=True)
 
-    # --- Figure 1: CVaR of all strategies --------------------------------
+    # --- Figure 1: risk of all strategies and the price of incompleteness --
+    # Left: CVaR of the five strategies, with and without costs.
+    # Right: without costs, the best risk in the Black-Scholes world vs the
+    # Heston world: the extra risk that hedging with the stock cannot remove.
+    fig, (ax_left, ax_right) = plt.subplots(
+        1, 2, figsize=(15, 4.8), gridspec_kw={"width_ratios": [1.6, 1]}
+    )
+
     width = 0.16
     x = np.arange(len(COSTS))
-    fig, ax = plt.subplots(figsize=(9, 4.5))
     for i, name in enumerate(STRATEGIES):
         values = [results[c][name]["cvar"] for c in COSTS]
-        ax.bar(x + (i - 2) * width, values, width, label=name)
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"cost {c:.1%}" for c in COSTS])
-    ax.set_ylabel(f"CVaR {ALPHA:.0%} of loss")
-    ax.set_title("Hedging risk under Heston stochastic volatility (N = 30, Heston premium)")
-    ax.grid(True, axis="y", alpha=0.3)
-    ax.legend(fontsize=8)
-    fig.tight_layout()
-    fig.savefig(FIGURES / "heston_comparison.png", dpi=150)
-    plt.close(fig)
+        ax_left.bar(x + (i - 2) * width, values, width, label=name)
+    ax_left.set_xticks(x)
+    ax_left.set_xticklabels([f"cost {c:.1%}" for c in COSTS])
+    ax_left.set_ylabel(f"CVaR {ALPHA:.0%} of loss")
+    ax_left.set_title("Hedging risk under Heston (N = 30, Heston premium)")
+    ax_left.grid(True, axis="y", alpha=0.3)
+    ax_left.legend(fontsize=8)
 
-    # --- Figure 2: the price of incompleteness (no costs) -----------------
     labels = ["BS delta", "Deep hedge"]
     bs_world = [gbm_cvar["BS delta"], gbm_cvar["Deep hedge"]]
     heston_world = [results[0.0]["BS delta, fixed vol"]["cvar"],
                     results[0.0]["Deep hedge (Heston), vol input"]["cvar"]]
     x = np.arange(len(labels))
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(x - 0.2, bs_world, 0.4, label="Black-Scholes world (constant vol)")
-    ax.bar(x + 0.2, heston_world, 0.4, label="Heston world (random vol)")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.set_ylabel(f"CVaR {ALPHA:.0%} of loss")
-    ax.set_title("Without costs: risk that hedging with the stock cannot remove")
-    ax.grid(True, axis="y", alpha=0.3)
-    ax.legend(fontsize=8)
+    ax_right.bar(x - 0.2, bs_world, 0.4, label="Black-Scholes world (constant vol)")
+    ax_right.bar(x + 0.2, heston_world, 0.4, label="Heston world (random vol)")
+    ax_right.set_xticks(x)
+    ax_right.set_xticklabels(labels)
+    ax_right.set_ylabel(f"CVaR {ALPHA:.0%} of loss")
+    ax_right.set_title("No costs: risk the stock cannot hedge")
+    ax_right.grid(True, axis="y", alpha=0.3)
+    ax_right.legend(fontsize=8)
+
+    fig.suptitle("Hedging under Heston stochastic volatility")
     fig.tight_layout()
-    fig.savefig(FIGURES / "heston_incompleteness.png", dpi=150)
+    fig.savefig(FIGURES / "heston_comparison.png", dpi=150)
     plt.close(fig)
 
-    # --- Figure 3: how the network adjusts the delta (no costs) -----------
+    # --- Figure 2: how the network adjusts the delta (no costs) -----------
     # Difference between the deep hedge and the BS delta with the current
     # volatility, at day 15, against the stock price, coloured by volatility.
     j = 15
@@ -210,7 +213,7 @@ def main():
     ax.set_xlim(85, 115)
     ax.set_xlabel("stock price S at day 15")
     ax.set_ylabel("deep hedge − BS delta (current vol)")
-    ax.set_title("The network holds fewer shares than the Black-Scholes delta (ρ < 0)")
+    ax.set_title("Deep hedge vs Black-Scholes delta with current volatility (day 15)")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     fig.savefig(FIGURES / "heston_skew_adjustment.png", dpi=150)
