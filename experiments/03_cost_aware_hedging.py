@@ -13,8 +13,9 @@ is fair, the coverage of the Leland premium is reported separately.
 Run from the repository root:
     python experiments/03_cost_aware_hedging.py
 
-Saves figures/cost_aware_cvar.png, figures/cost_aware_turnover.png and
-figures/cost_aware_pnl.png, and prints Markdown tables.
+Saves figures/cost_aware_cvar.png (risk vs rebalancing frequency) and
+figures/cost_aware_trading.png (trading volume and P&L distributions),
+and prints Markdown tables.
 """
 
 from pathlib import Path
@@ -144,32 +145,32 @@ def main():
     fig.savefig(FIGURES / "cost_aware_cvar.png", dpi=150)
     plt.close(fig)
 
-    # --- Figure 2: turnover vs rebalancing frequency ----------------------
-    fig, ax = plt.subplots(figsize=(6, 4))
-    for name in STRATEGIES:
-        ax.semilogx(n, [s["turnover"] for s in results[0.005][name]], "o-", label=name)
-    ax.set_xlabel("number of rebalancing steps N")
-    ax.set_ylabel("shares traded per path")
-    ax.set_title("Trading volume, transaction cost 0.5%")
-    ax.grid(True, which="both", alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(FIGURES / "cost_aware_turnover.png", dpi=150)
-    plt.close(fig)
+    # --- Figure 2: trading volume and P&L distributions (cost 0.5%) -------
+    # Left: how many shares each strategy trades, depending on N.
+    # Right: the resulting P&L distributions at daily rebalancing (N = 30).
+    fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(12, 4.5))
 
-    # --- Figure 3: P&L distributions -------------------------------------
-    bins = np.linspace(-5, 2, 100)
-    fig, ax = plt.subplots(figsize=(7, 4))
     for name in STRATEGIES:
-        ax.hist(histogram_pnl[name], bins=bins, alpha=0.5, density=True,
-                histtype="stepfilled", label=name)
-    ax.axvline(0, color="black", linewidth=0.8)
-    ax.set_xlabel("P&L of the hedged short call (Black-Scholes premium)")
-    ax.set_ylabel("density")
-    ax.set_title("P&L distribution, N = 30, transaction cost 0.5%")
-    ax.legend()
+        ax_left.semilogx(n, [s["turnover"] for s in results[0.005][name]], "o-", label=name)
+    ax_left.set_xlabel("number of rebalancing steps N")
+    ax_left.set_ylabel("shares traded per path")
+    ax_left.set_title("Trading volume vs rebalancing frequency")
+    ax_left.grid(True, which="both", alpha=0.3)
+    ax_left.legend()
+
+    bins = np.linspace(-5, 2, 100)
+    for name in STRATEGIES:
+        ax_right.hist(histogram_pnl[name], bins=bins, alpha=0.5, density=True,
+                      histtype="stepfilled", label=name)
+    ax_right.axvline(0, color="black", linewidth=0.8)
+    ax_right.set_xlabel("P&L of the hedged short call (Black-Scholes premium)")
+    ax_right.set_ylabel("density")
+    ax_right.set_title("P&L distribution, N = 30")
+    ax_right.legend()
+
+    fig.suptitle("Cost-aware hedging with transaction cost 0.5%")
     fig.tight_layout()
-    fig.savefig(FIGURES / "cost_aware_pnl.png", dpi=150)
+    fig.savefig(FIGURES / "cost_aware_trading.png", dpi=150)
     plt.close(fig)
 
     print(f"\nSaved figures to {FIGURES}/")

@@ -63,13 +63,26 @@ mean shifts to the left (more negative) with higher transaction costs.
 ### Cost-aware hedging: Leland and Whalley–Wilmott
 
 With transaction costs, delta hedging trades too much: its risk explodes as the rebalancing
-frequency grows. Leland's adjusted volatility reduces this, and Whalley–Wilmott's no-trade band
-almost removes it: its trading volume and risk stay nearly constant however often trading is
-allowed. All strategies receive the Black–Scholes premium, Whalley–Wilmott's risk aversion is
-tuned on separate training paths.
+frequency grows. Leland tries to solve this by adjusting the volatility, and Whalley–Wilmott
+introduces a no-trade band around the delta. Both improve compared to delta hedging.
+
+For both cost levels, delta's risk (CVaR) first falls and then increases with the number of
+rebalancing steps. Leland's risk is considerably lower than delta's, at 0.5% costs it also rises
+again for frequent rebalancing, at 0.1% it levels off. Whalley–Wilmott's risk keeps decreasing
+over the tested numbers of rebalancing steps.
+
+The trading volume explains this: Whalley–Wilmott trades an almost constant number of shares per
+path (about 2), however often it is allowed to trade, whereas Leland trades only somewhat less than
+delta hedging, with the gap growing for frequent rebalancing (5.5 vs 7.4 shares at N = 400).
+Leland's P&L distribution is narrower and more symmetric than the others (smaller standard deviation), 
+while delta has a longer tail of losses. Whalley–Wilmott pays the least in costs, so its distribution 
+is shifted furthest to the right (mean −0.90 vs −1.37 for delta).
+
+All strategies receive the Black–Scholes premium. Whalley–Wilmott's risk aversion γ is chosen
+empirically as the γ with the lowest CVaR on separate training paths.
 
 ![CVaR vs rebalancing frequency](figures/cost_aware_cvar.png)
-![Trading volume](figures/cost_aware_turnover.png)
+![Trading volume and P&L distributions](figures/cost_aware_trading.png)
 
 ### Deep hedging
 
