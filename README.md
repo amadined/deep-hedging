@@ -16,26 +16,33 @@ Following Buehler, Gonon, Teichmann and Wood (2019), this project trains a neura
 
 ## Roadmap
 
-- [x] Black–Scholes pricer and delta
-- [x] Geometric Brownian motion simulator
-- [x] Monte Carlo pricing with standard errors, validated against Black–Scholes
-- [x] Heston simulator and semi-analytic Heston pricer
-- [x] Classical hedging baselines: delta, Leland, Whalley–Wilmott
-- [x] Deep hedging network with CVaR loss (PyTorch)
-- [x] Experiments with transaction costs
-- [ ] Experiments under Heston
+- Black–Scholes pricer and delta
+- Geometric Brownian motion simulator
+- Monte Carlo pricing with standard errors, validated against Black–Scholes
+- Heston simulator and semi-analytic Heston pricer
+- Classical hedging baselines: delta, Leland, Whalley–Wilmott
+- Deep hedging network with CVaR loss (PyTorch)
+- Experiments with transaction costs
+- Experiments under Heston
 
-## Results so far
+## Results
 
-Comparing Monte Carlo pricing to Black-Scholes exact pricing.
+### Comparison Black-Scholes price vs. Monte Carlo price
+
+The Black-Scholes formula gives us an exact price for the option. We calculate the Monte Carlo price by
+taking the mean over the discounted payoffs of 200'000 Monte Carlo simulated paths with risk-neutral drift (μ = r). 
 
 | Option | S₀  | K   | T      | r   | σ   | Black–Scholes | Monte Carlo | Std. error | z     |
-|--------------------------------------------------------------------------------------------|
+|---|---|---|---|---|---|---|---|---|---|
 | Call   | 100 | 100 | 1      | 5%  | 20% | 10.4506       | 10.4645     | 0.0329     | +0.42 |
 | Put    | 100 | 100 | 1      | 5%  | 20% | 5.5735        | 5.5769      | 0.0194     | +0.17 |
 | Call   | 42  | 40  | 0.5    | 10% | 20% | 4.7594        | 4.7543      | 0.0111     | -0.46 |
 | Put    | 42  | 40  | 0.5    | 10% | 20% | 0.8086        | 0.8072      | 0.0041     | -0.34 |
 | Call   | 100 | 105 | 30/252 | 0%  | 20% | 0.9980        | 1.0032      | 0.0057     | +0.92 |
+
+The column *z* denotes the difference between the two prices in units of std. errors (z = (MC price − BS price) / standard error).
+If the simulation is correct, z follows approximately a standard normal distribution. In all five examples we have |z| < 1, 
+and we conclude that the Black-Scholes price and the Monte Carlo price agree up to simulation noise. 
 
 ### Monte Carlo convergence
 
@@ -98,13 +105,20 @@ Black–Scholes world (1.50 vs 0.98): the cost of an incomplete market.
 
 ```
 src/deep_hedging/
-├── black_scholes.py     closed-form prices and delta
-├── monte_carlo.py       payoffs and Monte Carlo pricing
+├── black_scholes.py     closed-form Black–Scholes prices, delta and gamma
+├── heston_pricing.py    semi-analytic Heston prices (characteristic function)
+├── monte_carlo.py       payoffs and Monte Carlo pricing with standard errors
+├── hedging.py           P&L of a hedged short option and trading volume (NumPy)
+├── risk.py              VaR, CVaR and summary statistics of the P&L
+├── baselines.py         classical strategies: delta, Leland, Whalley–Wilmott
+├── deep_hedger.py       neural hedging strategy and its training (PyTorch)
 └── models/
-    └── gbm.py           geometric Brownian motion simulator
-tests/                   unit tests against known theory
+    ├── gbm.py           geometric Brownian motion simulator (exact)
+    └── heston.py        Heston simulator (full-truncation Euler)
+tests/                   unit tests against known theory and hand-checked examples
 experiments/             one script per experiment, writes to figures/
 figures/                 generated plots
+models/                  trained networks (created by experiments 04 and 05, not in git)
 ```
 
 ## Setup
@@ -118,6 +132,23 @@ pip install -e ".[dev]"
 pytest
 ```
 
+## Running the experiments
+
+Run each script from the repository root; figures are written to `figures/`.
+
+```bash
+python experiments/00_mc_validation.py      # Monte Carlo vs Black–Scholes prices (table)
+python experiments/01_mc_convergence.py     # Monte Carlo convergence rate
+python experiments/02_delta_hedging.py      # delta hedging with transaction costs
+python experiments/03_cost_aware_hedging.py # Leland and Whalley–Wilmott
+python experiments/04_deep_hedging.py       # deep hedging vs classical strategies
+python experiments/05_heston_hedging.py     # hedging under Heston stochastic volatility
+```
+
+Experiments 00–03 take seconds to about a minute. Experiments 04 and 05 train neural
+networks, which takes a few minutes per network on a laptop CPU. The trained networks are
+saved in `models/` and reused on later runs. Delete that folder to retrain from scratch.
+
 ## References
 
 - J. C. Hull. *Options, Futures, and Other Derivatives.* 7th ed. Pearson Prentice Hall, 2009.
@@ -126,8 +157,8 @@ pytest
 - S. Heston. *A Closed-Form Solution for Options with Stochastic Volatility.* Review of Financial Studies, 1993.
 - H. Leland. *Option Pricing and Replication with Transactions Costs.* Journal of Finance, 1985.
 - A. E. Whalley, P. Wilmott. *An Asymptotic Analysis of an Optimal Hedging Model for Option Pricing with Transaction Costs.* Mathematical Finance, 1997.
-- Lord, Koekkoek and van Dijk (2010), A comparison of biased simulation schemes for stochastic volatility models, Quantitative Finance.
-- Albrecher, Mayer, Schoutens and Tistaert (2007), The little Heston trap, Wilmott Magazine.
+- R. Lord, R. Koekkoek, D. van Dijk. *A Comparison of Biased Simulation Schemes for Stochastic Volatility Models.* Quantitative Finance 10(2), 2010.
+- H. Albrecher, P. Mayer, W. Schoutens, J. Tistaert. *The Little Heston Trap.* Wilmott Magazine, 2007.
 
 ## License
 
