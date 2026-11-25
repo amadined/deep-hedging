@@ -1,5 +1,7 @@
 # deep-hedging
 
+[![tests](https://github.com/amadined/deep-hedging/actions/workflows/tests.yml/badge.svg)](https://github.com/amadined/deep-hedging/actions/workflows/tests.yml)
+
 Deep hedging of European options under transaction costs and stochastic volatility (Heston), compared against classical benchmarks. Python / PyTorch.
 
 ## Question
