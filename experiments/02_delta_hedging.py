@@ -11,8 +11,8 @@ N times until maturity. Shows:
 Run from the repository root:
     python experiments/02_delta_hedging.py
 
-Saves figures/delta_hedging_error.png, figures/delta_hedging_costs.png
-and figures/delta_hedging_pnl.png, and prints a Markdown table.
+Saves figures/delta_hedging.png (hedging error, risk vs rebalancing frequency
+and P&L distribution in one figure), and prints a Markdown table.
 """
 
 from pathlib import Path
@@ -77,49 +77,45 @@ def main():
     FIGURES.mkdir(exist_ok=True)
     n = np.array(N_STEPS_LIST)
 
-    # --- Figure 1: hedging error without costs ---------------------------
+    # --- One figure with three panels -----------------------------------
+    # Left: without costs, the hedging error falls like 1/sqrt(N).
+    # Middle: with costs, the risk first falls and then rises again.
+    # Right: at daily rebalancing, costs shift and widen the P&L distribution.
     std_no_cost = np.array([s["std"] for s in results[0.0]])
     reference = std_no_cost[0] * np.sqrt(n[0] / n)
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.loglog(n, std_no_cost, "o-", label="std of hedging P&L")
-    ax.loglog(n, reference, ":", color="grey", label=r"$\propto 1/\sqrt{N}$")
-    ax.set_xlabel("number of rebalancing steps N")
-    ax.set_ylabel("standard deviation of P&L")
-    ax.set_title("Delta hedging error without transaction costs")
-    ax.legend()
-    ax.grid(True, which="both", alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(FIGURES / "delta_hedging_error.png", dpi=150)
-    plt.close(fig)
+    fig, (ax_left, ax_mid, ax_right) = plt.subplots(1, 3, figsize=(17, 4.8))
 
-    # --- Figure 2: risk vs rebalancing frequency for each cost level -----
-    fig, ax = plt.subplots(figsize=(6, 4))
+    ax_left.loglog(n, std_no_cost, "o-", label="std of hedging P&L")
+    ax_left.loglog(n, reference, ":", color="grey", label=r"$\propto 1/\sqrt{N}$")
+    ax_left.set_xlabel("number of rebalancing steps N")
+    ax_left.set_ylabel("standard deviation of P&L")
+    ax_left.set_title("No costs: error falls like 1/√N")
+    ax_left.legend()
+    ax_left.grid(True, which="both", alpha=0.3)
+
     for c in COSTS:
         cvars = [s["cvar"] for s in results[c]]
-        ax.semilogx(n, cvars, "o-", label=f"cost {c:.1%}")
-    ax.set_xlabel("number of rebalancing steps N")
-    ax.set_ylabel(f"CVaR {ALPHA:.0%} of loss")
-    ax.set_title("Delta hedging: risk vs rebalancing frequency")
-    ax.legend()
-    ax.grid(True, which="both", alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(FIGURES / "delta_hedging_costs.png", dpi=150)
-    plt.close(fig)
+        ax_mid.semilogx(n, cvars, "o-", label=f"cost {c:.1%}")
+    ax_mid.set_xlabel("number of rebalancing steps N")
+    ax_mid.set_ylabel(f"CVaR {ALPHA:.0%} of loss")
+    ax_mid.set_title("With costs: more trading is not always better")
+    ax_mid.legend()
+    ax_mid.grid(True, which="both", alpha=0.3)
 
-    # --- Figure 3: P&L distributions at daily rebalancing ----------------
     bins = np.linspace(-4, 2, 100)
-    fig, ax = plt.subplots(figsize=(7, 4))
     for c in COSTS:
-        ax.hist(pnl_for_histogram[c], bins=bins, alpha=0.5, density=True,
-                histtype="stepfilled", label=f"delta hedge, cost {c:.1%}")
-    ax.axvline(0, color="black", linewidth=0.8)
-    ax.set_xlabel("P&L of the hedged short call")
-    ax.set_ylabel("density")
-    ax.set_title("P&L distribution, daily rebalancing (N = 30)")
-    ax.legend()
+        ax_right.hist(pnl_for_histogram[c], bins=bins, alpha=0.5, density=True,
+                      histtype="stepfilled", label=f"cost {c:.1%}")
+    ax_right.axvline(0, color="black", linewidth=0.8)
+    ax_right.set_xlabel("P&L of the hedged short call")
+    ax_right.set_ylabel("density")
+    ax_right.set_title("P&L distribution, daily rebalancing (N = 30)")
+    ax_right.legend()
+
+    fig.suptitle("Black–Scholes delta hedging of a short one-month at-the-money call")
     fig.tight_layout()
-    fig.savefig(FIGURES / "delta_hedging_pnl.png", dpi=150)
+    fig.savefig(FIGURES / "delta_hedging.png", dpi=150)
     plt.close(fig)
 
     print(f"\nSaved figures to {FIGURES}/")

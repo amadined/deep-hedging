@@ -63,13 +63,13 @@ mean error, which smooth out as the number of seeds grows. At 100 seeds the mean
 
 Hedging a short one-month at-the-money call with the Black–Scholes delta.
 Without costs, the hedging error falls like 1/√N in the number of rebalancing steps.
-With proportional transaction costs, more frequent rebalancing eventually *increases*
-risk: the CVaR is lowest at an intermediate frequency (around N = 100 for 0.1% costs,
-N = 20 for 0.5%). Plain delta hedging has no way to trade off hedging error against
-costs, which motivates cost-aware strategies and deep hedging.
+With transaction costs, the risk (CVaR) first falls and then rises again with the number of
+rebalancing steps: more trading reduces the hedging error but costs more. We see there is 
+an optimal rebalancing frequency (N=100 for cost 0.1%, N=20 for cost 0.5%).
+The P&L distribution gets wider (larger standard devation), skewness gets more negative and the 
+mean shifts to the left (more negative) with higher transaction costs. 
 
-![Delta hedging error](figures/delta_hedging_error.png)
-![Risk vs rebalancing frequency](figures/delta_hedging_costs.png)
+![Delta hedging: error, risk vs rebalancing frequency and P&L distribution](figures/delta_hedging.png)
 
 ### Cost-aware hedging: Leland and Whalley–Wilmott
 
