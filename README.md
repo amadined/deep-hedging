@@ -120,11 +120,21 @@ the stock falls, so fewer shares are needed overall.
 
 ![Deep hedge vs Black–Scholes delta with current volatility](figures/heston_skew_adjustment.png)
 
+### Robustness to the training run
+
+Each deep hedger was trained with 5 different seeds (initial weights and training paths) and
+evaluated on the same test paths. With 0.5% costs, all 5 networks beat the best classical strategy
+(CVaR 2.21 ± 0.03 vs 2.44 for Leland). With 0.1% costs the deep hedge is better on average
+(1.25 ± 0.03 vs 1.28), with one network level with Leland. Without costs the networks scatter
+around the delta hedge (0.97 ± 0.04 vs 0.99), as expected when delta hedging is close to optimal.
+
+![Deep hedging for several training seeds](figures/training_seeds.png)
+
 ## Extensions
 
--[] Repeat the training with several seeds.
--[] Better inputs near maturity.
--[] Other risk measures.
+-[x] Repeat the training with several seeds.
+-[ ] Better inputs near maturity.
+-[ ] Other risk measures.
 
 ## Future work
 
@@ -176,9 +186,10 @@ python experiments/02_delta_hedging.py      # delta hedging with transaction cos
 python experiments/03_cost_aware_hedging.py # Leland and Whalley–Wilmott
 python experiments/04_deep_hedging.py       # deep hedging vs classical strategies
 python experiments/05_heston_hedging.py     # hedging under Heston stochastic volatility
+python experiments/06_training_seeds.py     # deep hedging results for several training seeds
 ```
 
-Experiments 00–03 take seconds to about a minute. Experiments 04 and 05 train neural
+Experiments 00–03 take seconds to about a minute. Experiments 04–06 train neural
 networks, which takes a few minutes per network on a laptop CPU. The trained networks are
 saved in `models/` and reused on later runs. Delete that folder to retrain from scratch.
 
